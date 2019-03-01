@@ -19,9 +19,16 @@ from kombu.utils.objects import cached_property
 from celery import signals
 from celery.app.task import Context
 from celery.app.trace import trace_task, trace_task_ret
-from celery.exceptions import (Ignore, InvalidTaskError, Reject, Retry,
-                               TaskRevokedError, Terminated,
-                               TimeLimitExceeded, WorkerLostError)
+from celery.exceptions import (
+    Ignore,
+    InvalidTaskError,
+    Reject,
+    Retry,
+    TaskRevokedError,
+    Terminated,
+    TimeLimitExceeded,
+    WorkerLostError,
+)
 from celery.five import monotonic, python_2_unicode_compatible, string
 from celery.platforms import signals as _signals
 from celery.utils.functional import maybe, noop
@@ -32,16 +39,15 @@ from celery.utils.time import maybe_iso8601, maybe_make_aware, timezone
 
 from . import state
 
-__all__ = ('Request',)
+__all__ = ("Request",)
 
 # pylint: disable=redefined-outer-name
 # We cache globals and attribute lookups, so disable this warning.
 
-IS_PYPY = hasattr(sys, 'pypy_version_info')
+IS_PYPY = hasattr(sys, "pypy_version_info")
 
 logger = get_logger(__name__)
-debug, info, warn, error = (logger.debug, logger.info,
-                            logger.warning, logger.error)
+debug, info, warn, error = (logger.debug, logger.info, logger.warning, logger.error)
 _does_info = False
 _does_debug = False
 
@@ -80,21 +86,51 @@ class Request(object):
 
     if not IS_PYPY:  # pragma: no cover
         __slots__ = (
-            'app', 'type', 'name', 'id', 'root_id', 'parent_id',
-            'on_ack', 'body', 'hostname', 'eventer', 'connection_errors',
-            'task', 'eta', 'expires', 'request_dict', 'on_reject', 'utc',
-            'content_type', 'content_encoding', 'argsrepr', 'kwargsrepr',
-            '_decoded',
-            '__weakref__', '__dict__',
+            "app",
+            "type",
+            "name",
+            "id",
+            "root_id",
+            "parent_id",
+            "on_ack",
+            "body",
+            "hostname",
+            "eventer",
+            "connection_errors",
+            "task",
+            "eta",
+            "expires",
+            "request_dict",
+            "on_reject",
+            "utc",
+            "content_type",
+            "content_encoding",
+            "argsrepr",
+            "kwargsrepr",
+            "_decoded",
+            "__weakref__",
+            "__dict__",
         )
 
-    def __init__(self, message, on_ack=noop,
-                 hostname=None, eventer=None, app=None,
-                 connection_errors=None, request_dict=None,
-                 task=None, on_reject=noop, body=None,
-                 headers=None, decoded=False, utc=True,
-                 maybe_make_aware=maybe_make_aware,
-                 maybe_iso8601=maybe_iso8601, **opts):
+    def __init__(
+        self,
+        message,
+        on_ack=noop,
+        hostname=None,
+        eventer=None,
+        app=None,
+        connection_errors=None,
+        request_dict=None,
+        task=None,
+        on_reject=noop,
+        body=None,
+        headers=None,
+        decoded=False,
+        utc=True,
+        maybe_make_aware=maybe_make_aware,
+        maybe_iso8601=maybe_iso8601,
+        **opts
+    ):
         if headers is None:
             headers = message.headers
         if body is None:
@@ -107,21 +143,19 @@ class Request(object):
         if decoded:
             self.content_type = self.content_encoding = None
         else:
-            self.content_type, self.content_encoding = (
-                message.content_type, message.content_encoding,
-            )
+            self.content_type, self.content_encoding = (message.content_type, message.content_encoding)
 
-        self.id = headers['id']
-        type = self.type = self.name = headers['task']
-        self.root_id = headers.get('root_id')
-        self.parent_id = headers.get('parent_id')
-        if 'shadow' in headers:
-            self.name = headers['shadow'] or self.name
-        timelimit = headers.get('timelimit', None)
+        self.id = headers["id"]
+        type = self.type = self.name = headers["task"]
+        self.root_id = headers.get("root_id")
+        self.parent_id = headers.get("parent_id")
+        if "shadow" in headers:
+            self.name = headers["shadow"] or self.name
+        timelimit = headers.get("timelimit", None)
         if timelimit:
             self.time_limits = timelimit
-        self.argsrepr = headers.get('argsrepr', '')
-        self.kwargsrepr = headers.get('kwargsrepr', '')
+        self.argsrepr = headers.get("argsrepr", "")
+        self.kwargsrepr = headers.get("kwargsrepr", "")
         self.on_ack = on_ack
         self.on_reject = on_reject
         self.hostname = hostname or gethostname()
@@ -131,46 +165,45 @@ class Request(object):
 
         # timezone means the message is timezone-aware, and the only timezone
         # supported at this point is UTC.
-        eta = headers.get('eta')
+        eta = headers.get("eta")
         if eta is not None:
             try:
                 eta = maybe_iso8601(eta)
             except (AttributeError, ValueError, TypeError) as exc:
-                raise InvalidTaskError(
-                    'invalid ETA value {0!r}: {1}'.format(eta, exc))
+                raise InvalidTaskError("invalid ETA value {0!r}: {1}".format(eta, exc))
             self.eta = maybe_make_aware(eta, self.tzlocal)
         else:
             self.eta = None
 
-        expires = headers.get('expires')
+        expires = headers.get("expires")
         if expires is not None:
             try:
                 expires = maybe_iso8601(expires)
             except (AttributeError, ValueError, TypeError) as exc:
-                raise InvalidTaskError(
-                    'invalid expires value {0!r}: {1}'.format(expires, exc))
+                raise InvalidTaskError("invalid expires value {0!r}: {1}".format(expires, exc))
             self.expires = maybe_make_aware(expires, self.tzlocal)
         else:
             self.expires = None
 
         delivery_info = message.delivery_info or {}
         properties = message.properties or {}
-        headers.update({
-            'reply_to': properties.get('reply_to'),
-            'correlation_id': properties.get('correlation_id'),
-            'delivery_info': {
-                'exchange': delivery_info.get('exchange'),
-                'routing_key': delivery_info.get('routing_key'),
-                'priority': properties.get('priority'),
-                'redelivered': delivery_info.get('redelivered'),
+        headers.update(
+            {
+                "reply_to": properties.get("reply_to"),
+                "correlation_id": properties.get("correlation_id"),
+                "delivery_info": {
+                    "exchange": delivery_info.get("exchange"),
+                    "routing_key": delivery_info.get("routing_key"),
+                    "priority": properties.get("priority"),
+                    "redelivered": delivery_info.get("redelivered"),
+                },
             }
-
-        })
+        )
         self.request_dict = headers
 
     @property
     def delivery_info(self):
-        return self.request_dict['delivery_info']
+        return self.request_dict["delivery_info"]
 
     def execute_using_pool(self, pool, **kwargs):
         """Used by the worker to send this task to the pool.
@@ -190,8 +223,7 @@ class Request(object):
         time_limit, soft_time_limit = self.time_limits
         result = pool.apply_async(
             trace_task_ret,
-            args=(self.type, task_id, self.request_dict, self.body,
-                  self.content_type, self.content_encoding),
+            args=(self.type, task_id, self.request_dict, self.body, self.content_type, self.content_encoding),
             accept_callback=self.on_accepted,
             timeout_callback=self.on_timeout,
             callback=self.on_success,
@@ -222,17 +254,20 @@ class Request(object):
         # pylint: disable=unpacking-non-sequence
         #    payload is a property, so pylint doesn't think it's a tuple.
         args, kwargs, embed = self._payload
-        request.update({
-            'loglevel': loglevel,
-            'logfile': logfile,
-            'hostname': self.hostname,
-            'is_eager': False,
-            'args': args,
-            'kwargs': kwargs
-        }, **embed or {})
-        retval = trace_task(self.task, self.id, args, kwargs, request,
-                            hostname=self.hostname, loader=self.app.loader,
-                            app=self.app)[0]
+        request.update(
+            {
+                "loglevel": loglevel,
+                "logfile": logfile,
+                "hostname": self.hostname,
+                "is_eager": False,
+                "args": args,
+                "kwargs": kwargs,
+            },
+            **embed or {}
+        )
+        retval = trace_task(
+            self.task, self.id, args, kwargs, request, hostname=self.hostname, loader=self.app.loader, app=self.app
+        )[0]
         self.acknowledge()
         return retval
 
@@ -248,7 +283,7 @@ class Request(object):
         signal = _signals.signum(signal or TERM_SIGNAME)
         if self.time_start:
             pool.terminate_job(self.worker_pid, signal)
-            self._announce_revoked('terminated', True, signal, False)
+            self._announce_revoked("terminated", True, signal, False)
         else:
             self._terminate_on_ack = pool, signal
         if self._apply_result is not None:
@@ -258,16 +293,11 @@ class Request(object):
 
     def _announce_revoked(self, reason, terminated, signum, expired):
         task_ready(self)
-        self.send_event('task-revoked',
-                        terminated=terminated, signum=signum, expired=expired)
-        self.task.backend.mark_as_revoked(
-            self.id, reason, request=self._context,
-            store_result=self.store_errors,
-        )
+        self.send_event("task-revoked", terminated=terminated, signum=signum, expired=expired)
+        self.task.backend.mark_as_revoked(self.id, reason, request=self._context, store_result=self.store_errors)
         self.acknowledge()
         self._already_revoked = True
-        send_revoked(self.task, request=self._context,
-                     terminated=terminated, signum=signum, expired=expired)
+        send_revoked(self.task, request=self._context, terminated=terminated, signum=signum, expired=expired)
 
     def revoked(self):
         """If revoked, skip task and mark state."""
@@ -277,10 +307,8 @@ class Request(object):
         if self.expires:
             expired = self.maybe_expire()
         if self.id in revoked_tasks:
-            info('Discarding revoked task: %s[%s]', self.name, self.id)
-            self._announce_revoked(
-                'expired' if expired else 'revoked', False, None, expired,
-            )
+            info("Discarding revoked task: %s[%s]", self.name, self.id)
+            self._announce_revoked("expired" if expired else "revoked", False, None, expired)
             return True
         return False
 
@@ -296,27 +324,22 @@ class Request(object):
         task_accepted(self)
         if not self.task.acks_late:
             self.acknowledge()
-        self.send_event('task-started')
+        self.send_event("task-started")
         if _does_debug:
-            debug('Task accepted: %s[%s] pid:%r', self.name, self.id, pid)
+            debug("Task accepted: %s[%s] pid:%r", self.name, self.id, pid)
         if self._terminate_on_ack is not None:
             self.terminate(*self._terminate_on_ack)
 
     def on_timeout(self, soft, timeout):
         """Handler called if the task times out."""
         if soft:
-            warn('Soft time limit (%ss) exceeded for %s[%s]',
-                 timeout, self.name, self.id)
+            warn("Soft time limit (%ss) exceeded for %s[%s]", timeout, self.name, self.id)
         else:
             task_ready(self)
-            error('Hard time limit (%ss) exceeded for %s[%s]',
-                  timeout, self.name, self.id)
+            error("Hard time limit (%ss) exceeded for %s[%s]", timeout, self.name, self.id)
             exc = TimeLimitExceeded(timeout)
 
-            self.task.backend.mark_as_failure(
-                self.id, exc, request=self._context,
-                store_result=self.store_errors,
-            )
+            self.task.backend.mark_as_failure(self.id, exc, request=self._context, store_result=self.store_errors)
 
             if self.task.acks_late and self.task.acks_on_failure_or_timeout:
                 self.acknowledge()
@@ -333,22 +356,22 @@ class Request(object):
         if self.task.acks_late:
             self.acknowledge()
 
-        self.send_event('task-succeeded', result=retval, runtime=runtime)
+        self.send_event("task-succeeded", result=retval, runtime=runtime)
 
     def on_retry(self, exc_info):
         """Handler called if the task should be retried."""
         if self.task.acks_late:
             self.acknowledge()
 
-        self.send_event('task-retried',
-                        exception=safe_repr(exc_info.exception.exc),
-                        traceback=safe_str(exc_info.traceback))
+        self.send_event(
+            "task-retried", exception=safe_repr(exc_info.exception.exc), traceback=safe_str(exc_info.traceback)
+        )
 
     def on_failure(self, exc_info, send_failed_event=True, return_ok=False):
         """Handler called if the task raised an exception."""
         task_ready(self)
         if isinstance(exc_info.exception, MemoryError):
-            raise MemoryError('Process got: %s' % (exc_info.exception,))
+            raise MemoryError("Process got: %s" % (exc_info.exception,))
         elif isinstance(exc_info.exception, Reject):
             return self.reject(requeue=exc_info.exception.requeue)
         elif isinstance(exc_info.exception, Ignore):
@@ -362,23 +385,16 @@ class Request(object):
         # These are special cases where the process wouldn't've had
         # time to write the result.
         if isinstance(exc, Terminated):
-            self._announce_revoked(
-                'terminated', True, string(exc), False)
+            self._announce_revoked("terminated", True, string(exc), False)
             send_failed_event = False  # already sent revoked event
         elif isinstance(exc, WorkerLostError) or not return_ok:
-            self.task.backend.mark_as_failure(
-                self.id, exc, request=self._context,
-                store_result=self.store_errors,
-            )
+            self.task.backend.mark_as_retry(self.id, exc, request=self._context, store_result=self.store_errors)
         # (acks_late) acknowledge after result stored.
         if self.task.acks_late:
-            reject = (
-                self.task.reject_on_worker_lost and
-                isinstance(exc, WorkerLostError)
-            )
+            reject = self.task.reject_on_worker_lost and isinstance(exc, WorkerLostError)
             ack = self.task.acks_on_failure_or_timeout
             if reject:
-                requeue = not self.delivery_info.get('redelivered')
+                requeue = not self.delivery_info.get("redelivered")
                 self.reject(requeue=requeue)
                 send_failed_event = False
             elif ack:
@@ -386,14 +402,13 @@ class Request(object):
 
         if send_failed_event:
             self.send_event(
-                'task-failed',
+                "task-failed",
                 exception=safe_repr(get_pickled_exception(exc_info.exception)),
                 traceback=exc_info.traceback,
             )
 
         if not return_ok:
-            error('Task handler raised error: %r', exc,
-                  exc_info=exc_info.exc_info)
+            error("Task handler raised error: %r", exc, exc_info=exc_info.exc_info)
 
     def acknowledge(self):
         """Acknowledge task."""
@@ -405,39 +420,38 @@ class Request(object):
         if not self.acknowledged:
             self.on_reject(logger, self.connection_errors, requeue)
             self.acknowledged = True
-            self.send_event('task-rejected', requeue=requeue)
+            self.send_event("task-rejected", requeue=requeue)
 
     def info(self, safe=False):
         return {
-            'id': self.id,
-            'name': self.name,
-            'args': self.argsrepr,
-            'kwargs': self.kwargsrepr,
-            'type': self.type,
-            'hostname': self.hostname,
-            'time_start': self.time_start,
-            'acknowledged': self.acknowledged,
-            'delivery_info': self.delivery_info,
-            'worker_pid': self.worker_pid,
+            "id": self.id,
+            "name": self.name,
+            "args": self.argsrepr,
+            "kwargs": self.kwargsrepr,
+            "type": self.type,
+            "hostname": self.hostname,
+            "time_start": self.time_start,
+            "acknowledged": self.acknowledged,
+            "delivery_info": self.delivery_info,
+            "worker_pid": self.worker_pid,
         }
 
     def humaninfo(self):
-        return '{0.name}[{0.id}]'.format(self)
+        return "{0.name}[{0.id}]".format(self)
 
     def __str__(self):
         """``str(self)``."""
-        return ' '.join([
-            self.humaninfo(),
-            ' ETA:[{0}]'.format(self.eta) if self.eta else '',
-            ' expires:[{0}]'.format(self.expires) if self.expires else '',
-        ])
+        return " ".join(
+            [
+                self.humaninfo(),
+                " ETA:[{0}]".format(self.eta) if self.eta else "",
+                " expires:[{0}]".format(self.expires) if self.expires else "",
+            ]
+        )
 
     def __repr__(self):
         """``repr(self)``."""
-        return '<{0}: {1} {2} {3}>'.format(
-            type(self).__name__, self.humaninfo(),
-            self.argsrepr, self.kwargsrepr,
-        )
+        return "<{0}: {1} {2} {3}>".format(type(self).__name__, self.humaninfo(), self.argsrepr, self.kwargsrepr)
 
     @property
     def tzlocal(self):
@@ -447,8 +461,7 @@ class Request(object):
 
     @property
     def store_errors(self):
-        return (not self.task.ignore_result or
-                self.task.store_errors_even_if_ignored)
+        return not self.task.ignore_result or self.task.store_errors_even_if_ignored
 
     @property
     def task_id(self):
@@ -471,12 +484,12 @@ class Request(object):
     @property
     def reply_to(self):
         # used by rpc backend when failures reported by parent process
-        return self.request_dict['reply_to']
+        return self.request_dict["reply_to"]
 
     @property
     def correlation_id(self):
         # used similarly to reply_to
-        return self.request_dict['correlation_id']
+        return self.request_dict["correlation_id"]
 
     @cached_property
     def _payload(self):
@@ -489,7 +502,7 @@ class Request(object):
         # pylint: disable=unpacking-non-sequence
         #    payload is a property, so pylint doesn't think it's a tuple.
         _, _, embed = self._payload
-        return embed.get('chord')
+        return embed.get("chord")
 
     @cached_property
     def errbacks(self):
@@ -498,13 +511,13 @@ class Request(object):
         # pylint: disable=unpacking-non-sequence
         #    payload is a property, so pylint doesn't think it's a tuple.
         _, _, embed = self._payload
-        return embed.get('errbacks')
+        return embed.get("errbacks")
 
     @cached_property
     def group(self):
         # used by backend.on_chord_part_return when failures reported
         # by parent process
-        return self.request_dict.get('group')
+        return self.request_dict.get("group")
 
     @cached_property
     def _context(self):
@@ -513,17 +526,21 @@ class Request(object):
         # pylint: disable=unpacking-non-sequence
         #    payload is a property, so pylint doesn't think it's a tuple.
         args, kwargs, embed = self._payload
-        request.update({
-            'hostname': self.hostname,
-            'args': args,
-            'kwargs': kwargs
-        }, **embed or {})
+        request.update({"hostname": self.hostname, "args": args, "kwargs": kwargs}, **embed or {})
         return Context(request)
 
 
-def create_request_cls(base, task, pool, hostname, eventer,
-                       ref=ref, revoked_tasks=revoked_tasks,
-                       task_ready=task_ready, trace=trace_task_ret):
+def create_request_cls(
+    base,
+    task,
+    pool,
+    hostname,
+    eventer,
+    ref=ref,
+    revoked_tasks=revoked_tasks,
+    task_ready=task_ready,
+    trace=trace_task_ret,
+):
     default_time_limit = task.time_limit
     default_soft_time_limit = task.soft_time_limit
     apply_async = pool.apply_async
@@ -531,7 +548,6 @@ def create_request_cls(base, task, pool, hostname, eventer,
     events = eventer and eventer.enabled
 
     class Request(base):
-
         def execute_using_pool(self, pool, **kwargs):
             task_id = self.id
             if (self.expires or task_id in revoked_tasks) and self.revoked():
@@ -540,8 +556,7 @@ def create_request_cls(base, task, pool, hostname, eventer,
             time_limit, soft_time_limit = self.time_limits
             result = apply_async(
                 trace,
-                args=(self.type, task_id, self.request_dict, self.body,
-                      self.content_type, self.content_encoding),
+                args=(self.type, task_id, self.request_dict, self.body, self.content_type, self.content_encoding),
                 accept_callback=self.on_accepted,
                 timeout_callback=self.on_timeout,
                 callback=self.on_success,
@@ -558,8 +573,7 @@ def create_request_cls(base, task, pool, hostname, eventer,
         def on_success(self, failed__retval__runtime, **kwargs):
             failed, retval, runtime = failed__retval__runtime
             if failed:
-                if isinstance(retval.exception, (
-                        SystemExit, KeyboardInterrupt)):
+                if isinstance(retval.exception, (SystemExit, KeyboardInterrupt)):
                     raise retval.exception
                 return self.on_failure(retval, return_ok=True)
             task_ready(self)
@@ -568,8 +582,6 @@ def create_request_cls(base, task, pool, hostname, eventer,
                 self.acknowledge()
 
             if events:
-                self.send_event(
-                    'task-succeeded', result=retval, runtime=runtime,
-                )
+                self.send_event("task-succeeded", result=retval, runtime=runtime)
 
     return Request
