@@ -363,7 +363,7 @@ class Request(object):
                 'terminated', True, string(exc), False)
             send_failed_event = False  # already sent revoked event
         elif isinstance(exc, WorkerLostError) or not return_ok:
-            self.task.backend.mark_as_failure(
+            self.task.backend.mark_as_retry(
                 self.id, exc, request=self, store_result=self.store_errors,
             )
         # (acks_late) acknowledge after result stored.
