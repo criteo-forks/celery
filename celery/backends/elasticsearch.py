@@ -38,6 +38,8 @@ class ElasticsearchBackend(KeyValueStoreBackend):
     scheme = 'http'
     host = 'localhost'
     port = 9200
+    username = ''
+    password = ''
     es_retry_on_timeout = False
     es_timeout = 10
     es_max_retries = 3
@@ -51,9 +53,10 @@ class ElasticsearchBackend(KeyValueStoreBackend):
             raise ImproperlyConfigured(E_LIB_MISSING)
 
         index = doc_type = scheme = host = port = None
+        username = password = ''
 
         if url:
-            scheme, host, port, _, _, path, _ = _parse_url(url)  # noqa
+            scheme, host, port, username, password, path, _ = _parse_url(url)  # noqa
             if path:
                 path = path.strip('/')
                 index, _, doc_type = path.partition('/')
@@ -63,6 +66,8 @@ class ElasticsearchBackend(KeyValueStoreBackend):
         self.scheme = scheme or self.scheme
         self.host = host or self.host
         self.port = port or self.port
+        self.username = username or self.username
+        self.password = password or self.password
 
         self.es_retry_on_timeout = (
             _get('elasticsearch_retry_on_timeout') or self.es_retry_on_timeout
@@ -132,7 +137,9 @@ class ElasticsearchBackend(KeyValueStoreBackend):
             '%s:%s' % (self.host, self.port),
             retry_on_timeout=self.es_retry_on_timeout,
             max_retries=self.es_max_retries,
-            timeout=self.es_timeout
+            timeout=self.es_timeout,
+            scheme=self.scheme,
+            http_auth=(self.username, self.password),
         )
 
     @property
