@@ -100,7 +100,6 @@ class Context(object):
     errbacks = None
     timelimit = None
     origin = None
-    task_name = None
     _children = None   # see property
     _protected = 0
 
@@ -137,7 +136,6 @@ class Context(object):
             'retries': self.retries,
             'reply_to': self.reply_to,
             'origin': self.origin,
-            'task_name': self.task_name
         }
 
     @property
@@ -935,7 +933,7 @@ class Task(object):
         """
         if task_id is None:
             task_id = self.request.id
-        self.backend.store_result(task_id, meta, state, **kwargs)
+        self.backend.store_result(task_id, meta, state, request=self.request, **kwargs)
 
     def on_success(self, retval, task_id, args, kwargs):
         """Success handler.
