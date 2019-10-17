@@ -49,7 +49,7 @@ def add_unlock_chord_task(app):
 
     @app.task(name='celery.chord_unlock', max_retries=None, shared=False,
               default_retry_delay=app.conf.get('chord_retry_interval', 1),
-              ignore_result=app.conf.get('chord_retry_ignore_result', True),
+              ignore_result=app.conf.get('chord_unlock_ignore_result', True),
               lazy=False, bind=True)
     def unlock_chord(self, group_id, callback, interval=None,
                      max_retries=None, result=None,
