@@ -699,6 +699,7 @@ class Task(object):
         S = self.signature_from_request(
             request, args, kwargs,
             countdown=countdown, eta=eta, retries=retries,
+            priority=request.delivery_info['priority'] if 'priority' in request.delivery_info.keys() else None,
             **options
         )
 
