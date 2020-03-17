@@ -1331,6 +1331,8 @@ class chord(Signature):
                 interval=interval,
                 countdown=countdown,
                 max_retries=max_retries,
+                propagate=options.get('propagate', None),
+                skip_join=options.get('skip_join', None)
             )
         # The execution of a chord body is normally triggered by its header's
         # tasks completing. If the header is empty this will never happen, so

@@ -54,7 +54,8 @@ def add_unlock_chord_task(app):
     def unlock_chord(self, group_id, callback, interval=None,
                      max_retries=None, result=None,
                      Result=app.AsyncResult, GroupResult=app.GroupResult,
-                     result_from_tuple=result_from_tuple, **kwargs):
+                     result_from_tuple=result_from_tuple,
+                     skip_join=False, propagate=False **kwargs):
         if interval is None:
             interval = self.default_retry_delay
 
@@ -75,32 +76,50 @@ def add_unlock_chord_task(app):
             )
         else:
             if not ready:
-                raise self.retry(countdown=interval, max_retries=max_retries)
+                try:
+                    raise self.retry(countdown=interval, max_retries=max_retries)
+                except MaxRetriesExceededError as e:
+                    if propagate:
+                        raise e
+                    else:
+                        logger.info('Chord unlock retried too many times but was configured to not propagate')
 
         callback = maybe_signature(callback, app=app)
-        try:
-            with allow_join_result():
-                ret = j(
-                    timeout=app.conf.result_chord_join_timeout,
-                    propagate=True,
-                )
-        except Exception as exc:  # pylint: disable=broad-except
+
+        if skip_join:
+            logger.exception('Chord skipping result join of group: %r...', group_id)
             try:
-                culprit = next(deps._failed_join_report())
-                reason = 'Dependency {0.id} raised {1!r}'.format(culprit, exc)
-            except StopIteration:
-                reason = repr(exc)
-            logger.exception('Chord %r raised: %r', group_id, exc)
-            app.backend.chord_error_from_stack(callback, ChordError(reason))
-        else:
-            try:
-                callback.delay(ret)
+                callback.delay()
             except Exception as exc:  # pylint: disable=broad-except
                 logger.exception('Chord %r raised: %r', group_id, exc)
                 app.backend.chord_error_from_stack(
                     callback,
                     exc=ChordError('Callback error: {0!r}'.format(exc)),
                 )
+        else:
+            try:
+                with allow_join_result():
+                    ret = j(
+                        timeout=app.conf.result_chord_join_timeout,
+                        propagate=True,
+                    )
+            except Exception as exc:  # pylint: disable=broad-except
+                try:
+                    culprit = next(deps._failed_join_report())
+                    reason = 'Dependency {0.id} raised {1!r}'.format(culprit, exc)
+                except StopIteration:
+                    reason = repr(exc)
+                logger.exception('Chord %r raised: %r', group_id, exc)
+                app.backend.chord_error_from_stack(callback, ChordError(reason))
+            else:
+                try:
+                    callback.delay(ret)
+                except Exception as exc:  # pylint: disable=broad-except
+                    logger.exception('Chord %r raised: %r', group_id, exc)
+                    app.backend.chord_error_from_stack(
+                        callback,
+                        exc=ChordError('Callback error: {0!r}'.format(exc)),
+                    )
     return unlock_chord
 
 
