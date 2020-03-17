@@ -341,8 +341,18 @@ class Backend(object):
                      traceback=None, request=None, **kwargs):
         """Update task state and result."""
         result = self.encode_result(result, state)
-        self._store_result(task_id, result, state, traceback,
-                           request=request, **kwargs)
+
+        for retries in range(3):
+            try:
+                self._store_result(task_id, result, state, traceback,
+                                request=request, **kwargs)
+            except Exception:
+                logger.warning(
+                        'Failed operation store_result. Retrying %s more times every 30 seconds.',
+                        max_retries - retries - 1, exc_info=True)
+                if retries + 1 >= max_retries:
+                    raise
+                time.sleep(30)
         return result
 
     def forget(self, task_id):
