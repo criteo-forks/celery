@@ -342,7 +342,8 @@ class Backend(object):
         """Update task state and result."""
         result = self.encode_result(result, state)
 
-        for retries in range(3):
+        max_retries = 3
+        for retries in range(max_retries):
             try:
                 self._store_result(task_id, result, state, traceback,
                                 request=request, **kwargs)
