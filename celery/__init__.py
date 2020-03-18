@@ -14,7 +14,7 @@ from collections import namedtuple
 
 SERIES = 'rhubarb'
 
-__version__ = '4.3.0+criteo14'
+__version__ = '4.3.0+criteo15'
 __author__ = 'Ask Solem'
 __contact__ = 'ask@celeryproject.org'
 __homepage__ = 'http://celeryproject.org'
