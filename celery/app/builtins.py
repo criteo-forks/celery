@@ -55,7 +55,7 @@ def add_unlock_chord_task(app):
                      max_retries=None, result=None,
                      Result=app.AsyncResult, GroupResult=app.GroupResult,
                      result_from_tuple=result_from_tuple,
-                     skip_join=False, propagate=False **kwargs):
+                     skip_join=False, propagate=False, **kwargs):
         if interval is None:
             interval = self.default_retry_delay
 
