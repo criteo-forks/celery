@@ -44,7 +44,7 @@ def add_unlock_chord_task(app):
     for completion.
     """
     from celery.canvas import maybe_signature
-    from celery.exceptions import ChordError
+    from celery.exceptions import ChordError, MaxRetriesExceededError
     from celery.result import allow_join_result, result_from_tuple
 
     @app.task(name='celery.chord_unlock', max_retries=None, shared=False,
