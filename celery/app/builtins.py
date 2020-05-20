@@ -77,11 +77,13 @@ def add_unlock_chord_task(app):
 
         callback = maybe_signature(callback, app=app)
         try:
-            with allow_join_result():
-                ret = j(
-                    timeout=app.conf.result_chord_join_timeout,
-                    propagate=True,
-                )
+            # if callback does not depend on group result then skip fetching it
+            if not callback.immutable:
+                with allow_join_result():
+                    ret = j(
+                        timeout=app.conf.result_chord_join_timeout,
+                        propagate=True,
+                    )
         except Exception as exc:  # pylint: disable=broad-except
             try:
                 culprit = next(deps._failed_join_report())
@@ -92,7 +94,10 @@ def add_unlock_chord_task(app):
             app.backend.chord_error_from_stack(callback, ChordError(reason))
         else:
             try:
-                callback.delay(ret)
+                if callback.immutable:
+                    callback.delay()
+                else:
+                    callback.delay(ret)
             except Exception as exc:  # pylint: disable=broad-except
                 logger.exception('Chord %r raised: %r', group_id, exc)
                 app.backend.chord_error_from_stack(
