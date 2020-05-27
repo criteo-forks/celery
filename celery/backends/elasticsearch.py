@@ -128,7 +128,7 @@ class ElasticsearchBackend(KeyValueStoreBackend):
             )
         except elasticsearch.exceptions.ConflictError:
             # document already exists, update it
-            self._update(id=key, body=body)
+            self._update(key, body, state)
 
     def _index(self, id, body, **kwargs):
         body = {bytes_to_str(k): v for k, v in items(body)}
@@ -141,7 +141,7 @@ class ElasticsearchBackend(KeyValueStoreBackend):
             **kwargs
         )
 
-    def _update(self, id, body, **kwargs):
+    def _update(self, id, body, state, **kwargs):
         body = {bytes_to_str(k): v for k, v in items(body)}
         retries = 3
         while retries > 0:
@@ -151,8 +151,11 @@ class ElasticsearchBackend(KeyValueStoreBackend):
                 if not res_get['found']:
                     return self._index(id, body, **kwargs)
                 parsed_result = self.decode_result(res_get['_source']['result'])
-                if parsed_result['status'] in states.READY_STATES:
-                    # if stored state is already in ready state, do nothing
+                if parsed_result['status'] == states.SUCCESS:
+                    # if stored state is already in success, do nothing
+                    return {'result': 'noop'}
+                elif parsed_result['status'] in states.READY_STATES and state in states.UNREADY_STATES:
+                    # if stored state is in ready state and current not, do nothing
                     return {'result': 'noop'}
 
                 # get current sequence number and primary term
